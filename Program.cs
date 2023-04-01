@@ -121,9 +121,9 @@ namespace Plugins_to_cpp_h
             //int enum_bytes = 1 << (group_id-10); // 1 byte, 2 bytes, 4 bytes 
             //int enum_bits = enum_bytes * 8;
             string class_type = "";
-            if      (current_param.Name == "_A") class_type = "uint_8";
-            else if (current_param.Name == "_B") class_type = "uint_16";
-            else if (current_param.Name == "_C") class_type = "uint_32";
+            if      (current_param.Name == "_A") class_type = "uint8_t";
+            else if (current_param.Name == "_B") class_type = "uint16_t";
+            else if (current_param.Name == "_C") class_type = "uint32_t";
             // idk how to assign the size of an enum, o we'll have t ocome abck to that one
             file.WriteLine("enum " + target_node + " : " + class_type + " {");
             for(int i = 0; i < current_param.ChildNodes.Count; i++){
