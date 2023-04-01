@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq.Expressions;
 using System.Net.WebSockets;
@@ -17,7 +18,8 @@ using System.Xml;
 namespace Plugins_to_cpp_h
 {
     internal class Program{
-        static string version = "0.4.0";
+        const string version = "0.4.0";
+
         static XmlNode root_node;
         static StreamWriter file;
 
@@ -49,7 +51,7 @@ namespace Plugins_to_cpp_h
             file.WriteLine("; SOURCE TIMESTAMP: " + "[EXAMPLE]");
             file.WriteLine("; SOURCE GAME VERSION: " + "[EXAMPLE]");
             file.WriteLine("; SOURCE PLUGIN: " + plugin_name);
-            file.WriteLine("; GENERATED TIMESTAMP: " + DateTime.Today.Date + " -> " + DateTime.Now.ToString("h:mm:ss tt"));
+            file.WriteLine("; GENERATED TIMESTAMP: " + DateTime.Today.Date.ToString("dd/MM/yyyy") + " -> " + DateTime.Now.ToString("h:mm:ss tt"));
             file.WriteLine("*/");
             file.WriteLine("");
             file.WriteLine("#pragma once");
@@ -59,46 +61,72 @@ namespace Plugins_to_cpp_h
             file.WriteLine("// ///////////////// //");
             file.WriteLine("// STRUCT REFERENCES //");
             file.WriteLine("// ///////////////// //\n");
-            structs_queue.Add(root_node.ChildNodes[0]);
-            for (int i = 0; i < structs_queue.Count; i++)
-            {
-                process_node(structs_queue[i]);
-            }
+            structs_queue.Add(root_node.ChildNodes[0]); // assume the first struct is the root struct
+            for (int i = 0; i < structs_queue.Count; i++) process_node(structs_queue[i]);
             file.WriteLine("");
             file.WriteLine("// /////////////// //");
             file.WriteLine("// FLAG REFERENCES //");
             file.WriteLine("// /////////////// //\n");
-            for (int i = 0; i < flags_queue.Count; i++)
-            {
-                process_flag(flags_queue[i]);
-            }
+            for (int i = 0; i < flags_queue.Count; i++) process_flag(flags_queue[i]);
             file.WriteLine("");
             file.WriteLine("// /////////////// //");
             file.WriteLine("// ENUM REFERENCES //");
             file.WriteLine("// /////////////// //\n");
-            for (int i = 0; i < enums_queue.Count; i++)
-            {
-                process_enum(enums_queue[i]);
-            }
+            for (int i = 0; i < enums_queue.Count; i++) process_enum(enums_queue[i]);
             file.WriteLine("#pragma pack(pop)");
             file.Close();
             file.Dispose();
             Console.WriteLine("finished conversion to: " + output_path + "\n");
             goto Start;
         }
+        static Dictionary<string, XmlNode> found_structures = new(); //for each of these we need to check if it does actually match
+        // if it doesn't match then we probably are going to have an interesting problem
         static List<XmlNode> structs_queue = new();
         static List<XmlNode> flags_queue = new();
         static List<XmlNode> enums_queue = new();
-        static void process_enum(XmlNode current_param)
-        {
+        static bool was_already_written(XmlNode node_that_were_about_to_write, string node_string){
+            if (found_structures.ContainsKey(node_string)){
+                XmlNode comparison_node = found_structures[node_string];
+                if (do_item_params_match(node_that_were_about_to_write, comparison_node)) return true;
+                else Debug.Assert(false, "non-matching reference with the same name, very bad");
+            }else found_structures.Add(node_string, node_that_were_about_to_write);
+            return false;
+        }
+        static bool do_item_params_match(XmlNode node_A, XmlNode node_B){
+            // test what type this is (either a struct, flag or enum)
+            byte A_type = 2;
+            byte B_type = 2;
+            // flags & enums have 3 or less characters for their name // enums: 0, flags: 1, structs: 2
+            if (node_A.Name.Length <= 3) A_type = (byte)((byte)(Convert.ToByte(node_A.Name.Substring(1), 16) - 10) /3);
+            if (node_B.Name.Length <= 3) B_type = (byte)((byte)(Convert.ToByte(node_B.Name.Substring(1), 16) - 10) /3);
+            if (A_type != B_type) return false;
+
+            // here we do the guid matching test, we simply check if the guids match, if they do then they are 100% the same struct
+            if (A_type == 2) return node_A.Name == node_B.Name;
+
+            // check if the child count is the same so we dont get any indexing errors, else they're likely not the same
+            if (node_A.ChildNodes.Count != node_B.ChildNodes.Count) return false;
+
+            // go through each child node and match their names up, if theres no differences then return because this is a copy
+            for (int i = 0; i < node_A.ChildNodes.Count; i++)
+                if (node_A.ChildNodes[i].Attributes?["n"]?.Value != node_B.ChildNodes[i].Attributes?["n"]?.Value) return false;
+
+            return true;
+        }
+        static void process_enum(XmlNode current_param){
             string target_node = filter_string(current_param.Attributes?["StructName1"]?.Value);
-
-
-            byte group_id = Convert.ToByte(current_param.Name.Substring(1), 16);
+            if (was_already_written(current_param, target_node)) return;
+            // for writing the exact bit number if inherited enums do not work
+            //byte group_id = Convert.ToByte(current_param.Name.Substring(1), 16);
+            //int enum_bytes = 1 << (group_id-10); // 1 byte, 2 bytes, 4 bytes 
+            //int enum_bits = enum_bytes * 8;
+            string class_type = "";
+            if      (current_param.Name == "_A") class_type = "uint_8";
+            else if (current_param.Name == "_B") class_type = "uint_16";
+            else if (current_param.Name == "_C") class_type = "uint_32";
             // idk how to assign the size of an enum, o we'll have t ocome abck to that one
-            file.WriteLine("enum " + target_node + "{");
-            for(int i = 0; i < current_param.ChildNodes.Count; i++)
-            {
+            file.WriteLine("enum " + target_node + " : " + class_type + " {");
+            for(int i = 0; i < current_param.ChildNodes.Count; i++){
                 XmlNode current = current_param.ChildNodes[i];
                 file.WriteLine("   " + filter_string(current.Attributes?["n"]?.Value) + " = " + i +",");
             }
@@ -108,15 +136,14 @@ namespace Plugins_to_cpp_h
         static void process_flag(XmlNode current_param)
         {
             string target_node = filter_string(current_param.Attributes?["StructName1"]?.Value);
+            if (was_already_written(current_param, target_node)) return;
 
 
-            byte group_id = Convert.ToByte(current_param.Name.Substring(1), 16);
-        
             file.WriteLine("struct " + target_node + "{");
             int bit_count = -1;
-            if      (group_id == 13){ bit_count = 32; file.WriteLine("   uint32_t content;");}
-            else if (group_id == 14){ bit_count = 16; file.WriteLine("   uint16_t content;");}
-            else if (group_id == 15){ bit_count =  8; file.WriteLine("   uint8_t content;");}
+            if      (current_param.Name == "_D"){ bit_count = 32; file.WriteLine("   uint32_t content;");}
+            else if (current_param.Name == "_E"){ bit_count = 16; file.WriteLine("   uint16_t content;");}
+            else if (current_param.Name == "_F"){ bit_count =  8; file.WriteLine("   uint8_t content;");}
 
             // write the size of thew struct
             // then process all the children into static access methods
@@ -136,6 +163,7 @@ namespace Plugins_to_cpp_h
         }
         static void process_node(XmlNode current_struct)
         {
+            if (was_already_written(current_struct, current_struct.Name)) return;
             // struct name
             file.WriteLine("struct " + filter_string(current_struct.Attributes?["Name"]?.Value) + "{");
 
