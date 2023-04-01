@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33205.214
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Plugins_to_cpp_h", "Plugins_to_cpp_h.csproj", "{51AB0EA0-F75A-4219-97BC-92DA5B27A846}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{51AB0EA0-F75A-4219-97BC-92DA5B27A846}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51AB0EA0-F75A-4219-97BC-92DA5B27A846}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51AB0EA0-F75A-4219-97BC-92DA5B27A846}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51AB0EA0-F75A-4219-97BC-92DA5B27A846}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0B69D921-739B-435C-9BBD-906084174AF3}
+	EndGlobalSection
+EndGlobal
