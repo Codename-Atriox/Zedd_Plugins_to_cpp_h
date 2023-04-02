@@ -54,13 +54,9 @@ namespace Plugins_to_cpp_h
             file.WriteLine("; GENERATED TIMESTAMP: " + DateTime.Today.Date.ToString("dd/MM/yyyy") + " -> " + DateTime.Now.ToString("h:mm:ss tt"));
             file.WriteLine("*/");
             file.WriteLine("");
-            file.WriteLine("#pragma once");
             file.WriteLine("#include \"commons.h\"");
             file.WriteLine("#pragma pack(push, 1)");
             file.WriteLine("");
-            file.WriteLine("// ///////////////// //");
-            file.WriteLine("// STRUCT REFERENCES //");
-            file.WriteLine("// ///////////////// //\n");
             structs_queue.Add(root_node.ChildNodes[0]); // assume the first struct is the root struct
             for (int i = 0; i < structs_queue.Count; i++) process_node(structs_queue[i]);
             file.WriteLine("");
@@ -73,15 +69,35 @@ namespace Plugins_to_cpp_h
             file.WriteLine("// ENUM REFERENCES //");
             file.WriteLine("// /////////////// //\n");
             for (int i = 0; i < enums_queue.Count; i++) process_enum(enums_queue[i]);
+            file.WriteLine("// ///////////////// //");
+            file.WriteLine("// STRUCT REFERENCES //");
+            file.WriteLine("// ///////////////// //\n");
+            // now we actually write the struct, and we do it in the inverse order that we found them in, hopefully to fix all errors
+            for (int i = struct_lines.Count-1; i >= 0; i--) for (int c = 0; c < struct_lines[i].Count; c++) file.WriteLine(struct_lines[i][c]);
+
             file.WriteLine("#pragma pack(pop)");
             file.Close();
             file.Dispose();
+
+            // then output the header file
+            //file = new StreamWriter(other_output_path);
+            //file.WriteLine("#pragma once");
+            //file.WriteLine("#include \"commons.h\"");
+
+            //for (int i = 0; i < structs_queue.Count; i++)   file.WriteLine("struct " + filter_string(structs_queue[i].Attributes?["Name"]?.Value) + ";");
+            //for (int i = 0; i < flags_queue.Count; i++)     file.WriteLine("struct " + filter_string(flags_queue[i].Attributes?["StructName1"]?.Value) + ";");
+            //for (int i = 0; i < enums_queue.Count; i++)     file.WriteLine("enum " + filter_string(enums_queue[i].Attributes?["StructName1"]?.Value) + ";");
+
+            //file.Close();
+            //file.Dispose();
+
             Console.WriteLine("finished conversion to: " + output_path + "\n");
             goto Start;
         }
         static Dictionary<string, XmlNode> found_structures = new(); //for each of these we need to check if it does actually match
         // if it doesn't match then we probably are going to have an interesting problem
         static List<XmlNode> structs_queue = new();
+        static List<List<string>> struct_lines = new();
         static List<XmlNode> flags_queue = new();
         static List<XmlNode> enums_queue = new();
         static bool was_already_written(XmlNode node_that_were_about_to_write, string node_string){
@@ -165,18 +181,20 @@ namespace Plugins_to_cpp_h
         {
             if (was_already_written(current_struct, current_struct.Name)) return;
             // struct name
-            file.WriteLine("struct " + filter_string(current_struct.Attributes?["Name"]?.Value) + "{");
+            List<string> current_struct_lines = new();
+            current_struct_lines.Add("struct " + filter_string(current_struct.Attributes?["Name"]?.Value) + "{");
 
             foreach (XmlNode param in current_struct.ChildNodes)
             {
-                process_n_param(param);
+                process_n_param(param, current_struct_lines);
             }
 
 
 
-            file.WriteLine("};");
+            current_struct_lines.Add("};");
+            struct_lines.Add(current_struct_lines);
         }
-        static void process_n_param(XmlNode param)
+        static void process_n_param(XmlNode param, List<string> lines)
         {
             byte group_id = Convert.ToByte(param.Name.Substring(1), 16);
             string group_name = group_names[group_id].cpp;
@@ -186,20 +204,20 @@ namespace Plugins_to_cpp_h
             {
                 // string types
                 case 0:
-                    file.WriteLine("   " + group_name + " " + param_name + "[32];");
+                    lines.Add("   " + group_name + " " + param_name + "[32];");
                     break;
                 case 1:
-                    file.WriteLine("   " + group_name + " " + param_name + "[256];");
+                    lines.Add("   " + group_name + " " + param_name + "[256];");
                     break;
                 case 9:
-                    file.WriteLine("   " + group_name + " " + param_name + "[4];");
+                    lines.Add("   " + group_name + " " + param_name + "[4];");
                     break;
                 // enum types
                 case 10:
                 case 11:
                 case 12:{
                         string target_node = filter_string(param.Attributes?["StructName1"]?.Value);
-                        file.WriteLine("   " + target_node + " " + param_name + ";");
+                        lines.Add("   " + target_node + " " + param_name + ";");
                         enums_queue.Add(param);
                     }break;
                 // flags types
@@ -207,14 +225,14 @@ namespace Plugins_to_cpp_h
                 case 14:
                 case 15:{
                         string target_node = filter_string(param.Attributes?["StructName1"]?.Value);
-                        file.WriteLine("   " + target_node + " " + param_name + ";");
+                        lines.Add("   " + target_node + " " + param_name + ";");
                         flags_queue.Add(param);
                     }break;
                 // spacer types
                 case 52:
                 case 53:
                     int length = Convert.ToInt32(param.Attributes?["Length"]?.Value);
-                    file.WriteLine("   " + group_name + " " + param_name + "["+ length + "];");
+                    lines.Add("   " + group_name + " " + param_name + "["+ length + "];");
                     break;
                 // not to be processed types
                 case 54:
@@ -226,7 +244,7 @@ namespace Plugins_to_cpp_h
                     string referenced_struct = param.Attributes?["GUID"]?.Value;
                     XmlNode next_struct = root_node.SelectSingleNode("_"+referenced_struct);
                     string next_struct_name = filter_string(next_struct.Attributes?["Name"]?.Value);
-                    file.WriteLine("   " + next_struct_name + " " + param_name + ";");
+                    lines.Add("   " + next_struct_name + " " + param_name + ";");
                     structs_queue.Add(next_struct);
                    }break;
                 case 57:{ 
@@ -234,7 +252,7 @@ namespace Plugins_to_cpp_h
                     XmlNode next_struct = root_node.SelectSingleNode("_"+referenced_struct);
                     string next_struct_name = filter_string(next_struct.Attributes?["Name"]?.Value);
                     string next_struct_count = next_struct.Attributes?["Count"]?.Value;
-                    file.WriteLine("   " + next_struct_name + " " + param_name + "["+ next_struct_count + "];");
+                    lines.Add("   " + next_struct_name + " " + param_name + "["+ next_struct_count + "];");
                     structs_queue.Add(next_struct);
                    }break;
                 // template types
@@ -243,17 +261,17 @@ namespace Plugins_to_cpp_h
                     string referenced_struct = param.Attributes?["GUID"]?.Value;
                     XmlNode next_struct = root_node.SelectSingleNode("_"+referenced_struct);
                     string next_struct_name = filter_string(next_struct.Attributes?["Name"]?.Value);
-                    file.WriteLine("   " + group_name + "<" + next_struct_name + "> " + param_name + ";");
+                    lines.Add("   " + group_name + "<" + next_struct_name + "> " + param_name + ";");
                     structs_queue.Add(next_struct);
                    }break;
 
                 case 68:
-                    file.WriteLine("   " + group_name + " " + param_name + ";" + "// WARNING: THIS TYPE WILL CAUSE ISSUES");
+                    lines.Add("   " + group_name + " " + param_name + ";" + " // WARNING: THIS TYPE WILL CAUSE ISSUES //");
                     break;
 
                 // unspecified types
                 default:
-                    file.WriteLine("   " + group_name + " " + param_name + ";");
+                    lines.Add("   " + group_name + " " + param_name + ";");
                     break;
             }
         }
