@@ -26,6 +26,35 @@ namespace Plugins_to_cpp_h
         static void Main(string[] args){
             string orign_plugins_path = "C:\\Users\\Joe bingle\\Downloads\\plugins\\";
             string output_converted_path = "C:\\Users\\Joe bingle\\Downloads\\plguins_cpp\\";
+            if (!Directory.Exists(orign_plugins_path)){
+                Console.WriteLine("Failed to find specified input path, retry with the correct path");
+                return;
+            }
+            if (!Directory.Exists(output_converted_path)){
+                Console.WriteLine("Failed to find specified output path, retry with the correct path");
+                return;
+            }
+            Console.WriteLine("generating shortguids.txt");
+
+            // generate a list of short guids, to beable to use with the program
+            file = new StreamWriter(output_converted_path + "shortguids.txt");
+
+            foreach (var plugin in Directory.GetFiles(orign_plugins_path)){
+                if (Path.GetExtension(plugin) != ".xml") continue;
+                XmlDocument xml = new();
+                xml.Load(plugin);
+                XmlNode first_struct = xml.SelectSingleNode("root").ChildNodes[0];
+                string guid = first_struct.Name.Substring(1);
+                ulong guid_1 = Convert.ToUInt64(guid.Substring(0, 16), 16);
+                ulong guid_2 = Convert.ToUInt64(guid.Substring(16, 16), 16);
+                ulong short_guid = guid_1 ^ guid_2;
+                file.WriteLine(Path.GetFileNameWithoutExtension(plugin) + " : " + short_guid);
+            }
+
+
+            file.Close();
+            file.Dispose();
+
             goto Start;
         Error:
             Console.WriteLine("conversion failed");
