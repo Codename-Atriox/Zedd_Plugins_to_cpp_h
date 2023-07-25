@@ -18,7 +18,7 @@ using System.Xml;
 namespace Plugins_to_cpp_h
 {
     internal class Program{
-        const string version = "0.4.0";
+        const string version = "0.4.1";
 
         static XmlNode root_node;
         static StreamWriter file;
